@@ -1,3 +1,6 @@
+try: import intel_extension_for_pytorch as ipex
+except ModuleNotFoundError: ipex = None
+
 import copy
 import time
 
@@ -25,7 +28,7 @@ class Trainer:
         # Initialize the network
         self.model = models.MuZeroNetwork(self.config)
         self.model.set_weights(copy.deepcopy(initial_checkpoint["weights"]))
-        self.model.to(torch.device("cuda" if self.config.train_on_gpu else "cpu"))
+        self.model.to(torch.device("cuda" if self.config.train_on_gpu else "xpu"))
         self.model.train()
 
         self.training_step = initial_checkpoint["training_step"]
@@ -60,7 +63,7 @@ class Trainer:
 
     def continuous_update_weights(self, replay_buffer, shared_storage):
         # Wait for the replay buffer to be filled
-        while ray.get(shared_storage.get_info.remote("num_played_games")) < 1:
+        while ray.get(shared_storage.get_info.remote("num_played_games")) < 10:
             time.sleep(0.1)
 
         next_batch = replay_buffer.get_batch.remote()
