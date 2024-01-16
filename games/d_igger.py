@@ -5,8 +5,7 @@ import numpy
 import torch
 
 import sys
-sys.path.append('/home/sobomax/projects/digger/tests')
-from test_python import DiggerGym
+from digger.DiggerGym import DiggerGym
 
 from .abstract_game import AbstractGame
 
