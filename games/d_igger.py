@@ -38,7 +38,7 @@ class MuZeroConfig:
 
 
         ### Self-Play
-        self.num_workers = 8  # Number of simultaneous threads/workers self-playing to feed the replay buffer
+        self.num_workers = 12  # Number of simultaneous threads/workers self-playing to feed the replay buffer
         self.selfplay_on_gpu = False
         self.max_moves = 5000  # Maximum number of moves if game is not finished before
         self.num_simulations = 50  # Number of future moves self-simulated
@@ -186,11 +186,11 @@ class Game(AbstractGame):
         observation = cv2.resize(observation, (96, 96), interpolation=cv2.INTER_AREA)
         #observation = numpy.asarray(observation, dtype="float32") / 256.0
         observation = numpy.moveaxis(observation, -1, 0)
-        #from PIL import Image
-        #for i in range(3):
-        #    image = Image.fromarray(observation[i], 'L')
-        #    image.show()
-        #raise Exception(f'{observation.dtype=} {observation.shape=}')
+        ##from PIL import Image
+        ##for i in range(3):
+        ##    image = Image.fromarray(observation[i], 'L')
+        ##    image.show()
+        ##raise Exception(f'{observation.dtype=} {observation.shape=}')
         observation = observation.astype(numpy.float32) / 255.0
         #observation = observation.reshape((1, 60, 96))
         return observation
