@@ -101,7 +101,7 @@ class MuZeroConfig:
 
 
         ### Replay Buffer
-        self.replay_buffer_size = int(1e6)  # Number of self-play games to keep in the replay buffer
+        self.replay_buffer_size = int(1e4)  # Number of self-play games to keep in the replay buffer
         self.num_unroll_steps = 5  # Number of game moves to keep for every batch element
         self.td_steps = 10  # Number of steps in the future to take into account for calculating the target value
         self.PER = True  # Prioritized Replay (See paper appendix Training), select in priority the elements in the replay buffer which are unexpected for the network
@@ -160,7 +160,7 @@ class Game(AbstractGame):
         observation = cv2.resize(observation, (96, 96), interpolation=cv2.INTER_AREA)
         observation = numpy.moveaxis(observation, -1, 0)
         observation = observation.astype(numpy.float32) / 255.0
-        return observation[:2], reward, done
+        return observation[:2], reward / 6000, done
 
     def legal_actions(self):
         """
