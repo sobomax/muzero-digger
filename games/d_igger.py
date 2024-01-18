@@ -26,7 +26,7 @@ class MuZeroConfig:
 
 
         ### Game
-        self.observation_shape = (3, 96, 96)  # Dimensions of the game observation, must be 3D (channel, height, width). For a 1D array, please reshape it to (1, 1, length of array)
+        self.observation_shape = (2, 96, 96)  # Dimensions of the game observation, must be 3D (channel, height, width). For a 1D array, please reshape it to (1, 1, length of array)
         self.action_space = list(range(5))  # Fixed list of all possible actions. You should only edit the length
         self.players = list(range(1))  # List of players. You should only edit the length
         self.stacked_observations = 32  # Number of previous observations and previous actions to add to the current observation
@@ -38,7 +38,7 @@ class MuZeroConfig:
 
 
         ### Self-Play
-        self.num_workers = 12  # Number of simultaneous threads/workers self-playing to feed the replay buffer
+        self.num_workers = 15  # Number of simultaneous threads/workers self-playing to feed the replay buffer
         self.selfplay_on_gpu = False
         self.max_moves = 5000  # Maximum number of moves if game is not finished before
         self.num_simulations = 50  # Number of future moves self-simulated
@@ -84,7 +84,7 @@ class MuZeroConfig:
         self.results_path = pathlib.Path(__file__).resolve().parents[1] / "results" / pathlib.Path(__file__).stem / datetime.datetime.now().strftime("%Y-%m-%d--%H-%M-%S")  # Path to store the model weights and TensorBoard logs
         self.save_model = True  # Save the checkpoint in results_path as model.checkpoint
         self.training_steps = int(1000e3)  # Total number of training steps (ie weights update according to a batch)
-        self.batch_size = 128  # Number of parts of games to train on at each training step
+        self.batch_size = 256  # Number of parts of games to train on at each training step
         self.checkpoint_interval = int(2e2)  # Number of training steps before using the model for self-playing
         self.value_loss_weight = 0.25  # Scale the value loss to avoid overfitting of the value function, paper recommends 0.25 (See paper appendix Reanalyze)
         self.train_on_gpu = torch.cuda.is_available()  # Train on GPU if available
@@ -115,7 +115,7 @@ class MuZeroConfig:
 
         ### Adjust the self play / training ratio to avoid over/underfitting
         self.self_play_delay = 0  # Number of seconds to wait after each played game
-        self.training_delay = 5.0  # Number of seconds to wait after each training step
+        self.training_delay = 0  # Number of seconds to wait after each training step
         self.ratio = None  # Desired training steps per self played step ratio. Equivalent to a synchronous version, training can take much longer. Set it to None to disable it
         # fmt: on
 
@@ -160,7 +160,7 @@ class Game(AbstractGame):
         observation = cv2.resize(observation, (96, 96), interpolation=cv2.INTER_AREA)
         observation = numpy.moveaxis(observation, -1, 0)
         observation = observation.astype(numpy.float32) / 255.0
-        return observation, reward, done
+        return observation[:2], reward, done
 
     def legal_actions(self):
         """
@@ -193,7 +193,7 @@ class Game(AbstractGame):
         ##raise Exception(f'{observation.dtype=} {observation.shape=}')
         observation = observation.astype(numpy.float32) / 255.0
         #observation = observation.reshape((1, 60, 96))
-        return observation
+        return observation[:2]
 
     def close(self):
         """

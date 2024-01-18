@@ -11,7 +11,7 @@ import torch
 import models
 
 
-@ray.remote
+@ray.remote(resources={"selfplay": 1})
 class SelfPlay:
     """
     Class which run in a dedicated thread to play games and save them to the replay-buffer.

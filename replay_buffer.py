@@ -1,3 +1,6 @@
+try: import intel_extension_for_pytorch as ipex
+except ModuleNotFoundError: ipex = None
+
 import copy
 import time
 
@@ -8,7 +11,7 @@ import torch
 import models
 
 
-@ray.remote
+@ray.remote(resources={"replay": 1})
 class ReplayBuffer:
     """
     Class which run in a dedicated thread to store played games and generate batch.
@@ -303,7 +306,7 @@ class ReplayBuffer:
         return target_values, target_rewards, target_policies, actions
 
 
-@ray.remote
+@ray.remote(resources={"reanalyze": 1})
 class Reanalyse:
     """
     Class which run in a dedicated thread to update the replay buffer with fresh information.
@@ -320,7 +323,7 @@ class Reanalyse:
         # Initialize the network
         self.model = models.MuZeroNetwork(self.config)
         self.model.set_weights(initial_checkpoint["weights"])
-        self.model.to(torch.device("cuda" if self.config.reanalyse_on_gpu else "cpu"))
+        self.model.to(torch.device("cuda" if self.config.reanalyse_on_gpu else "xpu"))
         self.model.eval()
 
         self.num_reanalysed_games = initial_checkpoint["num_reanalysed_games"]

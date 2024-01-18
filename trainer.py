@@ -11,7 +11,7 @@ import torch
 import models
 
 
-@ray.remote
+@ray.remote(resources={"train": 1})
 class Trainer:
     """
     Class which run in a dedicated thread to train a neural network and save it
