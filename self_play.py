@@ -341,8 +341,8 @@ class MCTS:
             # state given an action and the previous hidden state
             parent = search_path[-2]
             value, reward, policy_logits, hidden_state = model.recurrent_inference(
-                parent.hidden_state.to(torch.half),
-                torch.tensor([[action]], dtype=torch.half).to(parent.hidden_state.device),
+                parent.hidden_state,
+                torch.tensor([[action]]).to(parent.hidden_state.device),
             )
             value = models.support_to_scalar(value, self.config.support_size).item()
             reward = models.support_to_scalar(reward, self.config.support_size).item()
@@ -462,7 +462,7 @@ class Node:
         self.hidden_state = hidden_state
 
         policy_values = torch.softmax(
-            torch.tensor([policy_logits[0][a] for a in actions]), dim=0
+            torch.tensor([policy_logits[0][a] for a in actions], dtype=torch.float), dim=0
         ).tolist()
         policy = {a: policy_values[i] for i, a in enumerate(actions)}
         for action, p in policy.items():
