@@ -292,7 +292,7 @@ class MCTS:
                 reward,
                 policy_logits,
                 hidden_state,
-            ) = model.initial_inference(observation)
+            ) = model.initial_inference(observation.to(torch.half))
             root_predicted_value = models.support_to_scalar(
                 root_predicted_value, self.config.support_size
             ).item()
@@ -341,8 +341,8 @@ class MCTS:
             # state given an action and the previous hidden state
             parent = search_path[-2]
             value, reward, policy_logits, hidden_state = model.recurrent_inference(
-                parent.hidden_state,
-                torch.tensor([[action]]).to(parent.hidden_state.device),
+                parent.hidden_state.to(torch.half),
+                torch.tensor([[action]], dtype=torch.half).to(parent.hidden_state.device),
             )
             value = models.support_to_scalar(value, self.config.support_size).item()
             reward = models.support_to_scalar(reward, self.config.support_size).item()
