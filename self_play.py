@@ -30,6 +30,7 @@ class SelfPlay:
         self.model.set_weights(initial_checkpoint["weights"])
         self.model.to(torch.device("cuda" if self.config.selfplay_on_gpu else "xpu"))
         self.model.eval()
+        if ipex is not None: self.model = ipex.optimize(self.model, dtype=torch.half)
 
     def continuous_self_play(self, shared_storage, replay_buffer, test_mode=False):
         while ray.get(
