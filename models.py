@@ -545,10 +545,10 @@ class MuZeroResidualNetwork(AbstractNetwork):
                     1,
                     encoded_state.shape[2],
                     encoded_state.shape[3],
-                )
+                ),
+                dtype=encoded_state.dtype
             )
             .to(action.device)
-            .float()
         )
         action_one_hot = (
             action[:, :, None, None] * action_one_hot / self.action_space_size
