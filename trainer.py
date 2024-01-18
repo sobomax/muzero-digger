@@ -3,6 +3,7 @@ except ModuleNotFoundError: ipex = None
 
 import copy
 import time
+import pickle
 
 import numpy
 import ray
@@ -61,6 +62,8 @@ class Trainer:
                 copy.deepcopy(initial_checkpoint["optimizer_state"])
             )
 
+        if ipex is not None: self.model, self.optimizer = ipex.optimize(self.model, optimizer=self.optimizer)
+
     def continuous_update_weights(self, replay_buffer, shared_storage):
         # Wait for the replay buffer to be filled
         while ray.get(shared_storage.get_info.remote("num_played_games")) < 10:
@@ -97,7 +100,8 @@ class Trainer:
                     }
                 )
                 if self.config.save_model:
-                    shared_storage.save_checkpoint.remote()
+                    shared_storage.save_checkpoint.remote(replay_buffer=replay_buffer.get_buffer.remote())
+
             shared_storage.set_info.remote(
                 {
                     "training_step": self.training_step,
