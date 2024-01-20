@@ -116,6 +116,7 @@ class SelfPlay:
                     time.sleep(0.5)
 
         self.close_game()
+        ray.actor.exit_actor()
 
     def play_game(
         self, temperature, temperature_threshold, render, opponent, muzero_player
