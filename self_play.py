@@ -3,6 +3,7 @@ except ModuleNotFoundError: ipex = None
 
 import math
 import time
+import gc
 
 import numpy
 import ray
@@ -11,11 +12,12 @@ import torch
 import models
 
 
-@ray.remote(resources={"selfplay": 1})
+@ray.remote(resources={"selfplay": 1}, max_restarts=-1)
 class SelfPlay:
     """
     Class which run in a dedicated thread to play games and save them to the replay-buffer.
     """
+    max_runs = 10
 
     def __init__(self, initial_checkpoint, Game, config, seed):
         self.config = config
@@ -33,12 +35,16 @@ class SelfPlay:
         if ipex is not None: self.model = ipex.optimize(self.model, dtype=torch.half)
 
     def continuous_self_play(self, shared_storage, replay_buffer, test_mode=False):
+        run = 0
         while ray.get(
             shared_storage.get_info.remote("training_step")
         ) < self.config.training_steps and not ray.get(
             shared_storage.get_info.remote("terminate")
-        ):
+        ) and run <= self.max_runs:
+            run += 1
             self.model.set_weights(ray.get(shared_storage.get_info.remote("weights")))
+            torch.xpu.empty_cache()
+            gc.collect()
 
             if not test_mode:
                 game_history = self.play_game(
