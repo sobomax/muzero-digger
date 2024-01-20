@@ -1,6 +1,7 @@
 try: import intel_extension_for_pytorch as ipex
 except ModuleNotFoundError: ipex = None
 
+import sys
 import math
 import time
 import gc
@@ -116,7 +117,8 @@ class SelfPlay:
                     time.sleep(0.5)
 
         self.close_game()
-        ray.actor.exit_actor()
+        if run == self.max_runs:
+            sys.exit(0)
 
     def play_game(
         self, temperature, temperature_threshold, render, opponent, muzero_player
