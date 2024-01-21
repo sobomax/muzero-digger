@@ -117,7 +117,8 @@ class SelfPlay:
                     time.sleep(0.5)
 
         self.close_game()
-        if run == self.max_runs:
+        if run > self.max_runs:
+            #ray.kill(self.remote())
             sys.exit(0)
 
     def play_game(
