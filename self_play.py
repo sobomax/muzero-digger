@@ -41,7 +41,7 @@ class SelfPlayInf:
     async def queue_recurrent_inference(self, state, action):
         return await self._recurrent_inference((state, action))
 
-    def _process_batch(self, func, batch):
+    def _batch_inference(self, func, batch):
         last_training_step = ray.get(self.shared_storage.get_info.remote("training_step"))
         if last_training_step > self.last_training_step:
             self.model.set_weights(ray.get(self.shared_storage.get_info.remote("weights")))
@@ -58,11 +58,11 @@ class SelfPlayInf:
 
     @ray.serve.batch
     async def _initial_inference(self, observations):
-        return self._process_batch(self.model.initial_inference, observations)
+        return self._batch_inference(self.model.initial_inference, observations)
 
     @ray.serve.batch
     async def _recurrent_inference(self, states_actions):
-        return self._process_batch(self.model.recurrent_inference, states_actions)
+        return self._batch_inference(self.model.recurrent_inference, states_actions)
 
 
 @ray.remote(resources={"selfplay": 1}, max_restarts=-1)
