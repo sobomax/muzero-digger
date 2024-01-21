@@ -182,18 +182,20 @@ class MuZero:
                 num_cpus=0,
                 num_gpus=num_gpus_per_worker if self.config.selfplay_on_gpu else 0,
             ).remote(
-                self.checkpoint,
                 self.Game,
                 self.config,
                 self.config.seed + seed,
             )
             for seed in range(self.config.num_workers)
         ]
+        self.self_play_inferencer = self_play.SelfPlayInf.options(num_cpus=0,
+            num_gpus=num_gpus_per_worker if self.config.selfplay_on_gpu else 0,
+        ).remote(self.checkpoint, self.config)
 
         # Launch workers
         [
             self_play_worker.continuous_self_play.remote(
-                self.shared_storage_worker, self.replay_buffer_worker
+                self.shared_storage_worker, self.replay_buffer_worker, self.self_play_inferencer
             )
             for self_play_worker in self.self_play_workers
         ]
@@ -225,7 +227,7 @@ class MuZero:
             self.config.seed + self.config.num_workers,
         )
         self.test_worker.continuous_self_play.remote(
-            self.shared_storage_worker, None, True
+            self.shared_storage_worker, None, True, self.self_play_inferencer
         )
 
         # Write everything in TensorBoard
