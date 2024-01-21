@@ -36,15 +36,19 @@ class SelfPlayInf:
         self.shared_storage = shared_storage
 
     @ray.serve.batch
-    async def queue_initial_inference(self, observation):
+    async def queue_initial_inference(self, observations):
         #return await self._initial_inference((observation,))
-        return self._batch_inference(self.model.initial_inference, observations)
+        observations = torch.cat(observations).to(next(self[0].model.parameters()).device)
+        return self[0]._batch_inference(self[0].model.initial_inference, observations)
 
     @ray.serve.batch
-    async def queue_recurrent_inference(self, states_actions):
-        return self._batch_inference(self.model.recurrent_inference, states_actions)
+    async def queue_recurrent_inference(self, states, actions):
+        #raise Exception(f'{len(states)=} {len(states_action[0])=}')
+        states = torch.cat(states).to(next(self[0].model.parameters()).device)
+        actions = torch.cat(states).to(next(self[0].model.parameters()).device)
+        return self[0]._batch_inference(self[0].model.recurrent_inference, states, actions)
 
-    def _batch_inference(self, func, batch):
+    def _batch_inference(self, func, *batchedargs):
         last_training_step = ray.get(self.shared_storage.get_info.remote("training_step"))
         if last_training_step > self.last_training_step:
             self.model.set_weights(ray.get(self.shared_storage.get_info.remote("weights")))
@@ -52,12 +56,12 @@ class SelfPlayInf:
             torch.xpu.empty_cache()
             gc.collect()
         # Convert observations to tensor, perform inference
-        args = batch.values()
         with torch.no_grad():
-            batchedargs = [torch.cat([a[i] for a in args]).to(next(self.model.parameters()).device) for i in range(len(args[0]))]
+            #batchedargs = [torch.cat([a[i] for a in batch]).to(next(self.model.parameters()).device) for i in range(len(batch[0]))]
+            #raise Exception(f'{batchedargs[0].shape=}')
             results = func(*batchedargs)
 
-        return [r for r in results]
+        return [[t[i].unsqueeze(0) for t in results] for i in range(batchedargs[0].shape[0])]
 
 #    @ray.serve.batch
 #    async def _initial_inference(self, observations):
@@ -406,8 +410,7 @@ class MCTS:
             # state given an action and the previous hidden state
             parent = search_path[-2]
             value, reward, policy_logits, hidden_state = ray.get(model_runner.queue_recurrent_inference.remote(
-                parent.hidden_state,
-                torch.tensor([[action]])
+                parent.hidden_state, torch.tensor([[action]])
             ))
             value = models.support_to_scalar(value, self.config.support_size).item()
             reward = models.support_to_scalar(reward, self.config.support_size).item()
