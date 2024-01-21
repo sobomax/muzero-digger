@@ -32,7 +32,7 @@ class SelfPlayInf:
         self.model.eval()
         if ipex is not None: self.model = ipex.optimize(self.model, dtype=torch.half)
 
-        self.last_training_step  = initial_checkpoint["training_step"]
+        self.last_checkpoint_step  = initial_checkpoint["checkpoint_step"]
         self.shared_storage = shared_storage
 
     @ray.serve.batch
@@ -49,10 +49,10 @@ class SelfPlayInf:
         return self[0]._batch_inference(self[0].model.recurrent_inference, states, actions)
 
     def _batch_inference(self, func, *batchedargs):
-        last_training_step = ray.get(self.shared_storage.get_info.remote("training_step"))
-        if last_training_step > self.last_training_step:
+        last_checkpoint_step = ray.get(self.shared_storage.get_info.remote("checkpoint_step"))
+        if last_checkpoint_step > self.last_checkpoint_step:
             self.model.set_weights(ray.get(self.shared_storage.get_info.remote("weights")))
-            self.last_training_step = last_training_step
+            self.last_checkpoint_step = last_checkpoint_step
             torch.xpu.empty_cache()
             gc.collect()
         # Convert observations to tensor, perform inference

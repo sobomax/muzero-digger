@@ -188,9 +188,12 @@ class MuZero:
             )
             for seed in range(self.config.num_workers)
         ]
-        self.self_play_inferencer = self_play.SelfPlayInf.options(num_cpus=0,
-            num_gpus=num_gpus_per_worker if self.config.selfplay_on_gpu else 0,
-        ).remote(self.checkpoint, self.config, self.shared_storage_worker)
+        self.self_play_inferencer = ray.util.ActorPool([
+            self_play.SelfPlayInf.options(num_cpus=0,
+                num_gpus=num_gpus_per_worker if self.config.selfplay_on_gpu else 0,
+            ).remote(self.checkpoint, self.config, self.shared_storage_worker)
+            for i in range(2)]
+        )
 
         # Launch workers
         [
@@ -466,6 +469,7 @@ class MuZero:
             self.checkpoint["num_played_steps"] = 0
             self.checkpoint["num_played_games"] = 0
             self.checkpoint["num_reanalysed_games"] = 0
+        self.checkpoint["checkpoint_step"] = self.checkpoint["training_step"]
 
     def diagnose_model(self, horizon):
         """
