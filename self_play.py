@@ -43,11 +43,11 @@ class SelfPlayInf:
 
     @ray.serve.batch
     async def _initial_inference(self, observations):
-        return self._process_batch(self.model.initial_inference, observations)
+        return await self._process_batch(self.model.initial_inference, observations)
 
     @ray.serve.batch
     async def _recurrent_inference(self, states_actions):
-        return self._process_batch(self.model.recurrent_inference, states_actions)
+        return await self._process_batch(self.model.recurrent_inference, states_actions)
 
     def _process_batch(self, func, batch):
         last_training_step = ray.get(self.shared_storage.get_info.remote("training_step"))
