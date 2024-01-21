@@ -36,16 +36,16 @@ class SelfPlayInf:
         self.shared_storage = shared_storage
 
     @ray.serve.batch
-    async def queue_initial_inference(self, observations):
+    async def initial_inference(self, observations):
         #return await self._initial_inference((observation,))
         observations = torch.cat(observations).to(next(self[0].model.parameters()).device)
         return self[0]._batch_inference(self[0].model.initial_inference, observations)
 
     @ray.serve.batch
-    async def queue_recurrent_inference(self, states, actions):
+    async def recurrent_inference(self, states_actions):
         #raise Exception(f'{len(states)=} {len(states_action[0])=}')
-        states = torch.cat(states).to(next(self[0].model.parameters()).device)
-        actions = torch.cat(states).to(next(self[0].model.parameters()).device)
+        states = torch.cat([s[0] for s in states_actions]).to(next(self[0].model.parameters()).device)
+        actions = torch.cat([s[1] for s in states_actions]).to(next(self[0].model.parameters()).device)
         return self[0]._batch_inference(self[0].model.recurrent_inference, states, actions)
 
     def _batch_inference(self, func, *batchedargs):
@@ -361,7 +361,7 @@ class MCTS:
                 reward,
                 policy_logits,
                 hidden_state,
-            ) = ray.get(model_runner.queue_initial_inference.remote(observation.to(torch.half)))
+            ) = ray.get(model_runner.initial_inference.remote(observation.to(torch.half)))
             root_predicted_value = models.support_to_scalar(
                 root_predicted_value, self.config.support_size
             ).item()
@@ -409,8 +409,8 @@ class MCTS:
             # Inside the search tree we use the dynamics function to obtain the next hidden
             # state given an action and the previous hidden state
             parent = search_path[-2]
-            value, reward, policy_logits, hidden_state = ray.get(model_runner.queue_recurrent_inference.remote(
-                parent.hidden_state, torch.tensor([[action]])
+            value, reward, policy_logits, hidden_state = ray.get(model_runner.recurrent_inference.remote(
+                (parent.hidden_state, torch.tensor([[action]]))
             ))
             value = models.support_to_scalar(value, self.config.support_size).item()
             reward = models.support_to_scalar(reward, self.config.support_size).item()
