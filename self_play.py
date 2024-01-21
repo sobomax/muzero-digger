@@ -63,14 +63,6 @@ class SelfPlayInf:
 
         return [[t[i].unsqueeze(0) for t in results] for i in range(batchedargs[0].shape[0])]
 
-#    @ray.serve.batch
-#    async def _initial_inference(self, observations):
-#        return SelfPlayInf._batch_inference(self, self.model.initial_inference, observations)
-
-#    @ray.serve.batch
-#    async def _recurrent_inference(self, states_actions):
-#        return SelfPlayInf._batch_inference(self, self.model.recurrent_inference, states_actions)
-
 
 @ray.remote(resources={"selfplay": 1}, max_restarts=-1)
 class SelfPlay:
@@ -356,13 +348,12 @@ class MCTS:
                 torch.tensor(observation)
                 .float()
                 .unsqueeze(0))
-            model_runner.submit(lambda a, v: a.initial_inference.remote(v), observation.to(torch.half))
             (
                 root_predicted_value,
                 reward,
                 policy_logits,
                 hidden_state,
-            ) = model_runner.get_next()
+            ) = ray.get(choice(model_runner).initial_inference.remote(observation.to(torch.half)))
             root_predicted_value = models.support_to_scalar(
                 root_predicted_value, self.config.support_size
             ).item()
@@ -410,8 +401,8 @@ class MCTS:
             # Inside the search tree we use the dynamics function to obtain the next hidden
             # state given an action and the previous hidden state
             parent = search_path[-2]
-            model_runner.submit(lambda a, v: a.recurrent_inference.remote(v), (parent.hidden_state, torch.tensor([[action]])))
-            value, reward, policy_logits, hidden_state = model_runner.get_next()
+            res = ray.get(choice(model_runner).recurrent_inference.remote((parent.hidden_state, torch.tensor([[action]]))))
+            value, reward, policy_logits, hidden_state = res
             value = models.support_to_scalar(value, self.config.support_size).item()
             reward = models.support_to_scalar(reward, self.config.support_size).item()
             node.expand(

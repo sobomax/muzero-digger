@@ -108,6 +108,7 @@ class MuZero:
             "episode_length": 0,
             "mean_value": 0,
             "training_step": 0,
+            "checkpoint_step": 0,
             "lr": 0,
             "total_loss": 0,
             "value_loss": 0,
@@ -188,12 +189,12 @@ class MuZero:
             )
             for seed in range(self.config.num_workers)
         ]
-        self.self_play_inferencer = ray.util.ActorPool([
+        self.self_play_inferencer = [
             self_play.SelfPlayInf.options(num_cpus=0,
                 num_gpus=num_gpus_per_worker if self.config.selfplay_on_gpu else 0,
             ).remote(self.checkpoint, self.config, self.shared_storage_worker)
-            for i in range(2)]
-        )
+            for i in range(2)
+        ]
 
         # Launch workers
         [
