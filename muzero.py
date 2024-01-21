@@ -226,7 +226,7 @@ class MuZero:
             self.config.seed + self.config.num_workers,
         )
         self.test_worker.continuous_self_play.remote(
-            self.shared_storage_worker, None, True, self.self_play_inferencer
+            self.shared_storage_worker, None, self.self_play_inferencer, True
         )
 
         # Write everything in TensorBoard
