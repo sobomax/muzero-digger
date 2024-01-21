@@ -353,7 +353,7 @@ class MCTS:
                 reward,
                 policy_logits,
                 hidden_state,
-            ) = ray.get(choice(model_runner).initial_inference.remote(observation.to(torch.half)))
+            ) = ray.get(numpy.random.choice(model_runner).initial_inference.remote(observation.to(torch.half)))
             root_predicted_value = models.support_to_scalar(
                 root_predicted_value, self.config.support_size
             ).item()
@@ -401,7 +401,7 @@ class MCTS:
             # Inside the search tree we use the dynamics function to obtain the next hidden
             # state given an action and the previous hidden state
             parent = search_path[-2]
-            res = ray.get(choice(model_runner).recurrent_inference.remote((parent.hidden_state, torch.tensor([[action]]))))
+            res = ray.get(numpy.random.choice(model_runner).recurrent_inference.remote((parent.hidden_state, torch.tensor([[action]]))))
             value, reward, policy_logits, hidden_state = res
             value = models.support_to_scalar(value, self.config.support_size).item()
             reward = models.support_to_scalar(reward, self.config.support_size).item()
