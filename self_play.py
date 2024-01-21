@@ -35,11 +35,14 @@ class SelfPlayInf:
         self.last_training_step  = initial_checkpoint["training_step"]
         self.shared_storage = shared_storage
 
+    @ray.serve.batch
     async def queue_initial_inference(self, observation):
-        return await self._initial_inference((observation,))
-    
-    async def queue_recurrent_inference(self, state, action):
-        return await self._recurrent_inference((state, action))
+        #return await self._initial_inference((observation,))
+        return self._batch_inference(self.model.initial_inference, observations)
+
+    @ray.serve.batch
+    async def queue_recurrent_inference(self, states_actions):
+        return self._batch_inference(self.model.recurrent_inference, states_actions)
 
     def _batch_inference(self, func, batch):
         last_training_step = ray.get(self.shared_storage.get_info.remote("training_step"))
@@ -56,13 +59,13 @@ class SelfPlayInf:
 
         return [r for r in results]
 
-    @ray.serve.batch
-    async def _initial_inference(self, observations):
-        return self._batch_inference(self.model.initial_inference, observations)
+#    @ray.serve.batch
+#    async def _initial_inference(self, observations):
+#        return SelfPlayInf._batch_inference(self, self.model.initial_inference, observations)
 
-    @ray.serve.batch
-    async def _recurrent_inference(self, states_actions):
-        return self._batch_inference(self.model.recurrent_inference, states_actions)
+#    @ray.serve.batch
+#    async def _recurrent_inference(self, states_actions):
+#        return SelfPlayInf._batch_inference(self, self.model.recurrent_inference, states_actions)
 
 
 @ray.remote(resources={"selfplay": 1}, max_restarts=-1)
