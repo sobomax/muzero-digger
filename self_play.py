@@ -69,7 +69,7 @@ class SelfPlay:
     """
     Class which run in a dedicated thread to play games and save them to the replay-buffer.
     """
-    max_runs = 10
+    max_runs = 10000000
 
     def __init__(self, Game, config, seed):
         self.config = config
