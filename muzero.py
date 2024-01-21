@@ -190,7 +190,7 @@ class MuZero:
         ]
         self.self_play_inferencer = self_play.SelfPlayInf.options(num_cpus=0,
             num_gpus=num_gpus_per_worker if self.config.selfplay_on_gpu else 0,
-        ).remote(self.checkpoint, self.config)
+        ).remote(self.checkpoint, self.config, self.shared_storage_worker)
 
         # Launch workers
         [
@@ -221,7 +221,6 @@ class MuZero:
             num_cpus=0,
             num_gpus=num_gpus,
         ).remote(
-            self.checkpoint,
             self.Game,
             self.config,
             self.config.seed + self.config.num_workers,

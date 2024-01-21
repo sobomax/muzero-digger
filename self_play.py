@@ -8,6 +8,7 @@ import gc
 
 import numpy
 import ray
+import ray.serve
 import torch
 from collections import OrderedDict
 
@@ -20,7 +21,7 @@ class SelfPlayInf:
     Class which run in a dedicated thread to play games and save them to the replay-buffer.
     """
 
-    def __init__(self, initial_checkpoint, config):
+    def __init__(self, initial_checkpoint, config, shared_storage):
         self.config = config
         self.batch_size = 8
 
@@ -31,28 +32,27 @@ class SelfPlayInf:
         self.model.eval()
         if ipex is not None: self.model = ipex.optimize(self.model, dtype=torch.half)
 
-        self.initials = OrderedDict()
-        self.recurrings = OrderedDict()
         self.last_training_step  = initial_checkpoint["training_step"]
+        self.shared_storage = shared_storage
 
-    def queue_initial_inference(self, shared_storage, observation, future):
-        self.initials[future] = (observation,)
-
-        if len(self.initials) >= self.batch_size:
-            self.process_batch(shared_storage, self.model.initial_inference, self.initials)
-            self.initials = OrderedDict()
+    async def queue_initial_inference(self, observation):
+        return await self._initial_inference((observation,))
     
-    def queue_recurrent_inference(self, shared_storage, state, action, future):
-        self.recurrings[future] = (state, action)
+    async def queue_recurrent_inference(self, state, action):
+        return await self._recurrent_inference((state, action))
 
-        if len(self.recurrings) >= self.batch_size:
-            self.process_batch(shared_storage, self.model.recurrent_inference, self.recurrings)
-            self.recurrings = OrderedDict()
+    @ray.serve.batch
+    async def _initial_inference(self, observations):
+        return self._process_batch(self.model.initial_inference, observations)
 
-    def process_batch(self, shared_storage, func, batch):
-        last_training_step = ray.get(shared_storage.get_info.remote("training_step"))
+    @ray.serve.batch
+    async def _recurrent_inference(self, states_actions):
+        return self._process_batch(self.model.recurrent_inference, states_actions)
+
+    def _process_batch(self, func, batch):
+        last_training_step = ray.get(self.shared_storage.get_info.remote("training_step"))
         if last_training_step > self.last_training_step:
-            self.model.set_weights(ray.get(shared_storage.get_info.remote("weights")))
+            self.model.set_weights(ray.get(self.shared_storage.get_info.remote("weights")))
             self.last_training_step = last_training_step
             torch.xpu.empty_cache()
             gc.collect()
@@ -62,9 +62,7 @@ class SelfPlayInf:
             batchedargs = [torch.cat([a[i] for a in args]).to(next(self.model.parameters()).device) for i in range(len(args[0]))]
             results = func(*batchedargs)
 
-        # Send results back to the respective callers
-        for future, result in zip(batch.keys(), results):
-            future.set_result(result)
+        return [r for r in results]
 
 @ray.remote(resources={"selfplay": 1}, max_restarts=-1)
 class SelfPlay:
@@ -111,6 +109,7 @@ class SelfPlay:
                     False,
                     "self",
                     0,
+                    model_runner,
                 )
 
                 replay_buffer.save_game.remote(game_history, shared_storage)
@@ -123,6 +122,7 @@ class SelfPlay:
                     False,
                     "self" if len(self.config.players) == 1 else self.config.opponent,
                     self.config.muzero_player,
+                    model_runner,
                 )
 
                 # Save to the shared storage
@@ -348,14 +348,12 @@ class MCTS:
                 torch.tensor(observation)
                 .float()
                 .unsqueeze(0))
-            future = ray.actor.Promise()
-            ray.get(model_runner.queue_initial_inference.remote(observation.to(torch.half), future))
             (
                 root_predicted_value,
                 reward,
                 policy_logits,
                 hidden_state,
-            ) = future.get()
+            ) = ray.get(model_runner.queue_initial_inference.remote(observation.to(torch.half)))
             root_predicted_value = models.support_to_scalar(
                 root_predicted_value, self.config.support_size
             ).item()
@@ -403,9 +401,10 @@ class MCTS:
             # Inside the search tree we use the dynamics function to obtain the next hidden
             # state given an action and the previous hidden state
             parent = search_path[-2]
-            ray.get(model_runner.queue_recurrent_inference.remote(), parent.hidden_state,
-              torch.tensor([[action]]).to(parent.hidden_state.device), future)
-            value, reward, policy_logits, hidden_state = future.get()
+            value, reward, policy_logits, hidden_state = ray.get(model_runner.queue_recurrent_inference.remote(
+                parent.hidden_state,
+                torch.tensor([[action]])
+            ))
             value = models.support_to_scalar(value, self.config.support_size).item()
             reward = models.support_to_scalar(reward, self.config.support_size).item()
             node.expand(
