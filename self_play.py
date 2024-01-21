@@ -41,14 +41,6 @@ class SelfPlayInf:
     async def queue_recurrent_inference(self, state, action):
         return await self._recurrent_inference((state, action))
 
-    @ray.serve.batch
-    async def _initial_inference(self, observations):
-        return await self._process_batch(self.model.initial_inference, observations)
-
-    @ray.serve.batch
-    async def _recurrent_inference(self, states_actions):
-        return await self._process_batch(self.model.recurrent_inference, states_actions)
-
     def _process_batch(self, func, batch):
         last_training_step = ray.get(self.shared_storage.get_info.remote("training_step"))
         if last_training_step > self.last_training_step:
@@ -63,6 +55,15 @@ class SelfPlayInf:
             results = func(*batchedargs)
 
         return [r for r in results]
+
+    @ray.serve.batch
+    async def _initial_inference(self, observations):
+        return self._process_batch(self.model.initial_inference, observations)
+
+    @ray.serve.batch
+    async def _recurrent_inference(self, states_actions):
+        return self._process_batch(self.model.recurrent_inference, states_actions)
+
 
 @ray.remote(resources={"selfplay": 1}, max_restarts=-1)
 class SelfPlay:
