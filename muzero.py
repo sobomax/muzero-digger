@@ -228,6 +228,7 @@ class MuZero:
             self.Game,
             self.config,
             self.config.seed + self.config.num_workers,
+            self.self_play_inferencer,
         )
         self.test_worker.continuous_self_play.remote(
             self.shared_storage_worker, None, True
