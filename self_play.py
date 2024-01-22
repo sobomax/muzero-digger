@@ -64,7 +64,7 @@ class SelfPlayInf:
         return [[t[i].unsqueeze(0) for t in results] for i in range(batchedargs[0].shape[0])]
 
     def get_node_id(self):
-        return ray.runtime_context.RuntimeContext.get_node_id()
+        return ray.get_runtime_context().get_node_id()
 
 @ray.remote(resources={"selfplay": 1}, max_restarts=-1)
 class SelfPlay:
@@ -80,7 +80,7 @@ class SelfPlay:
         # Fix random generator seed
         numpy.random.seed(seed)
         torch.manual_seed(seed)
-        my_node_id = ray.runtime_context.RuntimeContext.get_node_id()
+        my_node_id = ray.get_runtime_context().get_node_id()
         for m in model_runners:
             if ray.get(m.get_node_id.remote()) != my_node_id: continue
             self.model_runner = m
