@@ -23,7 +23,6 @@ class SelfPlayInf:
 
     def __init__(self, initial_checkpoint, config, shared_storage):
         self.config = config
-        self.batch_size = 8
 
         # Initialize the network
         self.model = models.MuZeroNetwork(self.config)
@@ -51,6 +50,7 @@ class SelfPlayInf:
     def _batch_inference(self, func, *batchedargs):
         last_checkpoint_step = ray.get(self.shared_storage.get_info.remote("checkpoint_step"))
         if last_checkpoint_step > self.last_checkpoint_step:
+            print(f'Updating checkpoint {self.last_checkpoint_step} -> {last_checkpoint_step}')
             self.model.set_weights(ray.get(self.shared_storage.get_info.remote("weights")))
             self.last_checkpoint_step = last_checkpoint_step
             torch.xpu.empty_cache()
@@ -63,6 +63,8 @@ class SelfPlayInf:
 
         return [[t[i].unsqueeze(0) for t in results] for i in range(batchedargs[0].shape[0])]
 
+    def get_node_id(self):
+        return ray.runtime_context.RuntimeContext.get_node_id()
 
 @ray.remote(resources={"selfplay": 1}, max_restarts=-1)
 class SelfPlay:
@@ -71,13 +73,19 @@ class SelfPlay:
     """
     max_runs = 10000000
 
-    def __init__(self, Game, config, seed):
+    def __init__(self, Game, config, seed, model_runners):
         self.config = config
         self.game = Game(seed)
 
         # Fix random generator seed
         numpy.random.seed(seed)
         torch.manual_seed(seed)
+        my_node_id = ray.runtime_context.RuntimeContext.get_node_id()
+        for m in model_runners:
+            if ray.get(m.get_node_id.remote()) != my_node_id: continue
+            self.model_runner = m
+            break
+        else: raise RuntimeError(f'No model runner on node {my_node_id}')
 
         # Initialize the network
         ##self.model = models.MuZeroNetwork(self.config)
@@ -86,7 +94,7 @@ class SelfPlay:
         ##self.model.eval()
         ##if ipex is not None: self.model = ipex.optimize(self.model, dtype=torch.half)
 
-    def continuous_self_play(self, shared_storage, replay_buffer, model_runner, test_mode=False):
+    def continuous_self_play(self, shared_storage, replay_buffer, test_mode=False):
         run = 0
         while ray.get(
             shared_storage.get_info.remote("training_step")
@@ -109,7 +117,6 @@ class SelfPlay:
                     False,
                     "self",
                     0,
-                    model_runner,
                 )
 
                 replay_buffer.save_game.remote(game_history, shared_storage)
@@ -122,7 +129,6 @@ class SelfPlay:
                     False,
                     "self" if len(self.config.players) == 1 else self.config.opponent,
                     self.config.muzero_player,
-                    model_runner,
                 )
 
                 # Save to the shared storage
@@ -175,7 +181,7 @@ class SelfPlay:
             sys.exit(0)
 
     def play_game(
-        self, temperature, temperature_threshold, render, opponent, muzero_player, model_runner
+        self, temperature, temperature_threshold, render, opponent, muzero_player
     ):
         """
         Play one game with actions based on the Monte Carlo tree search at each moves.
@@ -209,7 +215,7 @@ class SelfPlay:
                 # Choose the action
                 if opponent == "self" or muzero_player == self.game.to_play():
                     root, mcts_info = MCTS(self.config).run(
-                        model_runner,
+                        self.model_runner,
                         stacked_observations,
                         self.game.legal_actions(),
                         self.game.to_play(),
@@ -252,13 +258,13 @@ class SelfPlay:
     def close_game(self):
         self.game.close()
 
-    def select_opponent_action(self, opponent, stacked_observations, model_runner):
+    def select_opponent_action(self, opponent, stacked_observations):
         """
         Select opponent action for evaluating MuZero level.
         """
         if opponent == "human":
             root, mcts_info = MCTS(self.config).run(
-                model_runner,
+                self.model_runner,
                 stacked_observations,
                 self.game.legal_actions(),
                 self.game.to_play(),
@@ -353,7 +359,7 @@ class MCTS:
                 reward,
                 policy_logits,
                 hidden_state,
-            ) = ray.get(numpy.random.choice(model_runner).initial_inference.remote(observation.to(torch.half)))
+            ) = ray.get(model_runner.initial_inference.remote(observation.to(torch.half)))
             root_predicted_value = models.support_to_scalar(
                 root_predicted_value, self.config.support_size
             ).item()
@@ -401,7 +407,7 @@ class MCTS:
             # Inside the search tree we use the dynamics function to obtain the next hidden
             # state given an action and the previous hidden state
             parent = search_path[-2]
-            res = ray.get(numpy.random.choice(model_runner).recurrent_inference.remote((parent.hidden_state, torch.tensor([[action]]))))
+            res = ray.get(model_runner.recurrent_inference.remote((parent.hidden_state, torch.tensor([[action]]))))
             value, reward, policy_logits, hidden_state = res
             value = models.support_to_scalar(value, self.config.support_size).item()
             reward = models.support_to_scalar(reward, self.config.support_size).item()
