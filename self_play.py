@@ -95,7 +95,7 @@ class SelfPlay:
         ) and run <= self.max_runs:
             run += 1
             ##self.model.set_weights(ray.get(shared_storage.get_info.remote("weights")))
-            torch.xpu.empty_cache()
+            ##torch.xpu.empty_cache()
             gc.collect()
 
             if not test_mode:
